@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>영화 티어리스트</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "맑은 고딕", sans-serif;
+    background: #1a1a1f; color: #eee; padding: 16px;
+  }
+  h1 { text-align: center; margin-bottom: 16px; font-size: 1.6rem; }
+
+  /* 입력 영역 */
+  .add-box {
+    max-width: 900px; margin: 0 auto 20px; background: #26262e;
+    padding: 16px; border-radius: 10px;
+  }
+  .add-box .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .add-box input, .add-box textarea {
+    flex: 1; min-width: 140px; padding: 8px 10px; border: none;
+    border-radius: 6px; background: #35353f; color: #eee; font-size: 0.9rem;
+  }
+  .add-box textarea { width: 100%; resize: vertical; min-height: 40px; }
+  .add-box button {
+    padding: 8px 18px; border: none; border-radius: 6px;
+    background: #4a7dff; color: #fff; cursor: pointer; font-weight: bold;
+  }
+  .add-box button:hover { background: #3a66d8; }
+
+  /* 미지정 영역 */
+  .section-title { max-width: 900px; margin: 16px auto 6px; font-size: 1rem; color: #aaa; }
+  .unassigned, .tier-row {
+    max-width: 900px; margin: 0 auto; min-height: 120px;
+    background: #22222a; border-radius: 8px; padding: 8px;
+    display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
+  }
+
+  /* 티어 */
+  .tier {
+    max-width: 900px; margin: 0 auto 10px; display: flex;
+    background: #22222a; border-radius: 8px; overflow: hidden;
+  }
+  .tier-label {
+    width: 70px; flex-shrink: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 1.6rem; font-weight: bold; color: #111;
+  }
+  .tier-S .tier-label { background: #ff7f7f; }
+  .tier-A .tier-label { background: #ffbf7f; }
+  .tier-B .tier-label { background: #ffff7f; }
+  .tier-C .tier-label { background: #7fff7f; }
+  .tier-D .tier-label { background: #7fbfff; }
+  .tier-body { flex: 1; padding: 8px; }
+  .tier-head {
+    display: flex; justify-content: flex-end; margin-bottom: 4px;
+  }
+  .tier-head select {
+    background: #35353f; color: #eee; border: none; border-radius: 4px;
+    padding: 3px 6px; font-size: 0.8rem;
+  }
+  .tier-drop {
+    display: flex; flex-wrap: wrap; gap: 8px; min-height: 100px; align-content: flex-start;
+  }
+
+  /* 영화 카드 */
+  .card {
+    position: relative; width: 100px; background: #2e2e38;
+    border-radius: 6px; overflow: hidden; cursor: grab; user-select: none;
+  }
+  .card img, .card .noposter {
+    width: 100%; height: 140px; object-fit: cover; display: block;
+    background: #44444f;
+  }
+  .card .noposter {
+    display: flex; align-items: center; justify-content: center;
+    color: #999; font-size: 0.8rem; text-align: center; padding: 4px;
+  }
+  .card .title {
+    padding: 5px; font-size: 0.78rem; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* 호버 팝업 */
+  .card .popup {
+    display: none; position: absolute; bottom: 100%; left: 50%;
+    transform: translateX(-50%); width: 200px; background: #000d;
+    border: 1px solid #4a7dff; border-radius: 6px; padding: 8px;
+    font-size: 0.78rem; z-index: 10; line-height: 1.4;
+  }
+  .card:hover .popup { display: block; }
+  .popup b { color: #8fb4ff; }
+  .popup .review { margin-top: 4px; color: #ccc; white-space: pre-wrap; }
+
+  .card .btns {
+    position: absolute; top: 2px; right: 2px; display: flex; gap: 2px;
+    opacity: 0; transition: 0.15s;
+  }
+  .card:hover .btns { opacity: 1; }
+  .card .btns button {
+    border: none; border-radius: 3px; width: 20px; height: 20px;
+    cursor: pointer; font-size: 0.7rem; color: #fff;
+  }
+  .btns .edit { background: #4a7dff; }
+  .btns .del { background: #e05555; }
+
+  .card.dragging { opacity: 0.4; }
+  .drop-over { outline: 2px dashed #4a7dff; outline-offset: -4px; }
+
+  /* 모바일 전환 버튼 */
+  .mobile-btn-wrap { text-align: center; margin: 24px 0; }
+  .mobile-btn-wrap button {
+    padding: 6px 14px; font-size: 0.8rem; background: #35353f;
+    color: #bbb; border: 1px solid #555; border-radius: 6px; cursor: pointer;
+  }
+
+  /* 모바일 모드 */
+  body.mobile .tier { flex-direction: column; }
+  body.mobile .tier-label { width: 100%; height: 40px; }
+  body.mobile .card { width: calc(33.333% - 6px); }
+  body.mobile .add-box .row { flex-direction: column; }
+</style>
+</head>
+<body>
+<h1>🎬 영화 티어리스트</h1>
+
+<!-- 영화 추가 -->
+<div class="add-box">
+  <div class="row">
+    <input id="in-title" placeholder="영화 제목 (필수)">
+    <input id="in-poster" placeholder="포스터 이미지 URL (선택)">
+  </div>
+  <div class="row">
+    <input id="in-release" placeholder="개봉일 (선택, 예: 2024-05-01)">
+    <button onclick="addMovie()">추가</button>
+  </div>
+  <div class="row">
+    <textarea id="in-review" placeholder="감상평 (선택)"></textarea>
+  </div>
+</div>
+
+<!-- 미지정 -->
+<div class="section-title">미지정 영화</div>
+<div id="unassigned" class="unassigned tier-drop" data-tier="unassigned"></div>
+
+<!-- 티어들 -->
+<div id="tiers"></div>
+
+<!-- 모바일 전환 -->
+<div class="mobile-btn-wrap">
+  <button onclick="toggleMobile()">📱 모바일 보기로 전환하기</button>
+</div>
+
+<script>
+  const TIERS = ["S", "A", "B", "C", "D"];
+  let movies = [];          // {id, title, poster, release, review, added, tier}
+  let sortModes = {};       // 등급별 정렬: "added" | "release"
+
+  // ---- 저장/불러오기 ----
+  function save() {
+    localStorage.setItem("movieTierList", JSON.stringify(movies));
+    localStorage.setItem("movieSortModes", JSON.stringify(sortModes));
+  }
+  function load() {
+    movies = JSON.parse(localStorage.getItem("movieTierList") || "[]");
+    sortModes = JSON.parse(localStorage.getItem("movieSortModes") || "{}");
+    TIERS.forEach(t => { if (!sortModes[t]) sortModes[t] = "added"; });
+  }
+
+  // ---- 영화 추가 ----
+  function addMovie() {
+    const title = document.getElementById("in-title").value.trim();
+    if (!title) { alert("제목은 반드시 입력해야 합니다."); return; }
+    movies.push({
+      id: Date.now().toString(),
+      title,
+      poster: document.getElementById("in-poster").value.trim(),
+      release: document.getElementById("in-release").value.trim(),
+      review: document.getElementById("in-review").value.trim(),
+      added: new Date().toISOString().slice(0, 10),
+      tier: "unassigned"
+    });
+    document.getElementById("in-title").value = "";
+    document.getElementById("in-poster").value = "";
+    document.getElementById("in-release").value = "";
+    document.getElementById("in-review").value = "";
+    save(); render();
+  }
+
+  // ---- 삭제 ----
+  function delMovie(id) {
+    if (!confirm("이 영화를 삭제할까요?")) return;
+    movies = movies.filter(m => m.id !== id);
+    save(); render();
+  }
+
+  // ---- 수정 ----
+  function editMovie(id) {
+    const m = movies.find(x => x.id === id);
+    if (!m) return;
+    const title = prompt("제목", m.title);
+    if (title === null) return;
+    if (!title.trim()) { alert("제목은 비울 수 없습니다."); return; }
+    m.title = title.trim();
+    const poster = prompt("포스터 URL (없으면 비움)", m.poster);
+    if (poster !== null) m.poster = poster.trim();
+    const release = prompt("개봉일", m.release);
+    if (release !== null) m.release = release.trim();
+    const review = prompt("감상평", m.review);
+    if (review !== null) m.review = review.trim();
+    save(); render();
+  }
+
+  // ---- 정렬 변경 ----
+  function changeSort(tier, mode) {
+    sortModes[tier] = mode;
+    save(); render();
+  }
+
+  // ---- 카드 HTML ----
+  function cardHTML(m) {
+    const poster = m.poster
+      ? `<img src="${escapeHtml(m.poster)}" onerror="this.outerHTML='<div class=\\'noposter\\'>포스터 없음</div>'">`
+      : `<div class="noposter">포스터 없음</div>`;
+    return `
+      <div class="card" draggable="true" data-id="${m.id}">
+        <div class="btns">
+          <button class="edit" onclick="editMovie('${m.id}')">✎</button>
+          <button class="del" onclick="delMovie('${m.id}')">✕</button>
+        </div>
+        ${poster}
+        <div class="title">${escapeHtml(m.title)}</div>
+        <div class="popup">
+          <b>제목:</b> ${escapeHtml(m.title)}<br>
+          <b>개봉일:</b> ${escapeHtml(m.release) || "-"}<br>
+          <b>추가일:</b> ${m.added}
+          <div class="review"><b>감상평:</b> ${escapeHtml(m.review) || "-"}</div>
+        </div>
+      </div>`;
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // ---- 정렬 함수 ----
+  function sortList(list, mode) {
+    return list.slice().sort((a, b) => {
+      if (mode === "release") return (b.release || "").localeCompare(a.release || "");
+      return (b.added || "").localeCompare(a.added || ""); // 추가일 최신순
+    });
+  }
+
+  // ---- 화면 그리기 ----
+  function render() {
+    // 미지정 영역
+    const un = document.getElementById("unassigned");
+    const unList = sortList(movies.filter(m => m.tier === "unassigned"), "added");
+    un.innerHTML = unList.map(cardHTML).join("");
+
+    // 티어 영역
+    const tiersDiv = document.getElementById("tiers");
+    tiersDiv.innerHTML = TIERS.map(t => {
+      const list = sortList(movies.filter(m => m.tier === t), sortModes[t]);
+      return `
+        <div class="tier tier-${t}">
+          <div class="tier-label">${t}</div>
+          <div class="tier-body">
+            <div class="tier-head">
+              <select onchange="changeSort('${t}', this.value)">
+                <option value="added" ${sortModes[t] === "added" ? "selected" : ""}>추가일순</option>
+                <option value="release" ${sortModes[t] === "release" ? "selected" : ""}>개봉일순</option>
+              </select>
+            </div>
+            <div class="tier-drop" data-tier="${t}">
+              ${list.map(cardHTML).join("")}
+            </div>
+          </div>
+        </div>`;
+    }).join("");
+
+    bindDnD();
+  }
+
+  // ---- 드래그 앤 드롭 ----
+  let dragId = null;
+
+  function bindDnD() {
+    document.querySelectorAll(".card").forEach(card => {
+      card.addEventListener("dragstart", e => {
+        dragId = card.dataset.id;
+        card.classList.add("dragging");
+      });
+      card.addEventListener("dragend", () => {
+        card.classList.remove("dragging");
+        dragId = null;
+      });
+    });
+
+    document.querySelectorAll(".tier-drop").forEach(zone => {
+      zone.addEventListener("dragover", e => {
+        e.preventDefault();
+        zone.classList.add("drop-over");
+      });
+      zone.addEventListener("dragleave", () => {
+        zone.classList.remove("drop-over");
+      });
+      zone.addEventListener("drop", e => {
+        e.preventDefault();
+        zone.classList.remove("drop-over");
+        if (!dragId) return;
+        const m = movies.find(x => x.id === dragId);
+        if (m) {
+          m.tier = zone.dataset.tier;   // "unassigned" 또는 "S"~"D"
+          save(); render();
+        }
+      });
+    });
+  }
+
+  // ---- 모바일 전환 ----
+  function toggleMobile() {
+    document.body.classList.toggle("mobile");
+    const isMobile = document.body.classList.contains("mobile");
+    localStorage.setItem("movieMobile", isMobile ? "1" : "0");
+  }
+
+  // ---- 초기 실행 ----
+  load();
+  if (localStorage.getItem("movieMobile") === "1") {
+    document.body.classList.add("mobile");
+  }
+  render();
+</script>
+</body>
+</html>
